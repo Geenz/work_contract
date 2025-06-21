@@ -83,7 +83,7 @@ namespace bcpp
     
 
         //=============================================================================
-        template <std::uint64_t N>
+        template <std::size_t N>
         class tree final
         {
         private:
