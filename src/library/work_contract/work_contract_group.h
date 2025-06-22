@@ -124,6 +124,7 @@ namespace bcpp::implementation
         ) requires (mode == synchronization_mode::blocking);
 
         void stop();
+        void wait();
 
     private:
 
@@ -222,6 +223,8 @@ namespace bcpp::implementation
         static thread_local std::uint64_t                               tls_biasFlags_;
 
         std::atomic<std::int64_t>                                       nonZeroCounter_{0};
+
+        std::atomic<std::uint64_t>                                      scheduled_contracts_{0};
 
         void decrement_non_zero_counter();
         void increment_non_zero_counter();
@@ -410,8 +413,10 @@ inline void bcpp::implementation::work_contract_group<T>::release
     static auto constexpr flags_to_set = (contract::release_flag | contract::schedule_flag);
     auto previousFlags = contracts_[contractId].flags_.fetch_or(flags_to_set);
     auto notScheduledNorExecuting = ((previousFlags & (contract::schedule_flag | contract::execute_flag)) == 0);
-    if (notScheduledNorExecuting)
+    if (notScheduledNorExecuting) {
         set_contract_signal(contractId);
+    }
+    scheduled_contracts_--;
 }
 
 
@@ -427,8 +432,10 @@ inline void bcpp::implementation::work_contract_group<T>::schedule
     static auto constexpr flags_to_set = contract::schedule_flag;
     auto previousFlags = contracts_[contractId].flags_.fetch_or(flags_to_set);
     auto notScheduledNorExecuting = ((previousFlags & (contract::schedule_flag | contract::execute_flag)) == 0);
-    if (notScheduledNorExecuting)
+    if (notScheduledNorExecuting) {
         set_contract_signal(contractId);
+    }
+    scheduled_contracts_++;
 }
 
 
@@ -578,6 +585,16 @@ inline std::uint64_t bcpp::implementation::work_contract_group<T>::execute_next_
     if (waitableState_.wait_for(this, duration))
         return this->execute_next_contract(biasFlags);
     return ~0ull;
+}
+
+
+template <bcpp::synchronization_mode T>
+inline void bcpp::implementation::work_contract_group<T>::wait
+(
+)
+{
+    while (scheduled_contracts_ != 0 && !stopped_) {
+    }
 }
 
 
